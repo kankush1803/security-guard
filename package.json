@@ -1,0 +1,66 @@
+{
+  "name": "secure-api-guard",
+  "version": "1.0.0",
+  "description": "Production-ready, battle-tested security middleware suite for Node.js and Express applications",
+  "main": "src/index.js",
+  "types": "src/types/index.d.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "security",
+    "express",
+    "middleware",
+    "rate-limit",
+    "api-key",
+    "ip-filter",
+    "helmet",
+    "security-headers",
+    "threat-detection",
+    "request-size",
+    "request-validation"
+  ],
+  "author": "secure-api-guard contributors",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "bytes": "^3.1.2",
+    "express-rate-limit": "^8.7.3",
+    "helmet": "^8.3.0",
+    "ipaddr.js": "^2.5.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.12",
+    "express": "^5.3.0",
+    "ioredis": "^6.0.0",
+    "supertest": "^7.3.1",
+    "vitest": "^4.1.12",
+    "zod": "^4.6.7"
+  },
+  "peerDependencies": {
+    "redis": ">=4.0.0",
+    "ioredis": ">=5.0.0",
+    "zod": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "redis": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  }
+}
