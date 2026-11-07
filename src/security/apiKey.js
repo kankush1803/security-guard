@@ -78,11 +78,7 @@ function isKeyExpired(keyRecord) {
   }
 
   const expiresTime = new Date(keyRecord.expiresAt).getTime();
-  if (isNaN(expiresTime)) {
-    return false;
-  }
-
-  return Date.now() > expiresTime;
+  return !Number.isNaN(expiresTime) && Date.now() > expiresTime;
 }
 
 module.exports = {

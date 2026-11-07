@@ -133,6 +133,18 @@ function compileRules(ruleStrings = []) {
 }
 
 /**
+ * Formats an IP string into its canonical parsed representation or original string.
+ *
+ * @param {string} ip
+ * @returns {string}
+ */
+function formatIp(ip) {
+  if (!ip) return '127.0.0.1';
+  const parsed = parseIp(ip);
+  return parsed ? parsed.toString() : ip;
+}
+
+/**
  * Safely extracts client IP according to proxy configuration.
  * Never blindly trusts X-Forwarded-For unless explicitly configured.
  *
@@ -144,7 +156,7 @@ function compileRules(ruleStrings = []) {
 function getClientIp(req, options = {}) {
   const trustProxy = options.trustProxy !== undefined ? options.trustProxy : false;
 
-  // Custom function
+  // Custom extractor function
   if (typeof options.getIp === 'function') {
     return options.getIp(req);
   }
@@ -154,20 +166,14 @@ function getClientIp(req, options = {}) {
     '127.0.0.1';
 
   if (!trustProxy) {
-    // When trustProxy is disabled, ONLY use direct socket address
-    const parsed = parseIp(directIp);
-    return parsed ? parsed.toString() : directIp;
+    return formatIp(directIp);
   }
 
-  // If trustProxy is boolean true, rely on express req.ip if available
-  if (trustProxy === true) {
-    if (req.ip) {
-      const parsed = parseIp(req.ip);
-      return parsed ? parsed.toString() : req.ip;
-    }
+  // If trustProxy is boolean true, prefer express req.ip if set
+  if (trustProxy === true && req.ip) {
+    return formatIp(req.ip);
   }
 
-  // If X-Forwarded-For is present and proxy is trusted
   const xForwardedFor = req.headers && req.headers['x-forwarded-for'];
   if (xForwardedFor) {
     const rawList = Array.isArray(xForwardedFor) ? xForwardedFor.join(',') : xForwardedFor;
@@ -175,46 +181,35 @@ function getClientIp(req, options = {}) {
 
     if (ips.length > 0) {
       if (typeof trustProxy === 'number') {
-        // Trust specified number of hops from the right
         const index = Math.max(0, ips.length - trustProxy);
-        const targetIp = ips[index] || directIp;
-        const parsed = parseIp(targetIp);
-        return parsed ? parsed.toString() : targetIp;
+        return formatIp(ips[index] || directIp);
       }
 
       if (Array.isArray(trustProxy)) {
-        // Trust only if directIp is in the trusted proxy list
         const trustedRules = compileRules(trustProxy);
         if (isIpInRules(directIp, trustedRules)) {
-          // Find first untrusted IP walking backwards from right to left
+          // Walk backwards to find first untrusted IP
           for (let i = ips.length - 1; i >= 0; i--) {
             if (!isIpInRules(ips[i], trustedRules)) {
-              const parsed = parseIp(ips[i]);
-              return parsed ? parsed.toString() : ips[i];
+              return formatIp(ips[i]);
             }
           }
-          // All are trusted; return the leftmost
-          const parsed = parseIp(ips[0]);
-          return parsed ? parsed.toString() : ips[0];
-        } else {
-          // Direct connection is not a trusted proxy! Reject X-Forwarded-For header spoofing
-          const parsed = parseIp(directIp);
-          return parsed ? parsed.toString() : directIp;
+          return formatIp(ips[0]);
         }
+        // Direct socket is not a trusted proxy: ignore spoofed header
+        return formatIp(directIp);
       }
 
-      // Boolean true fallback: take the first valid IP
-      const parsed = parseIp(ips[0]);
-      return parsed ? parsed.toString() : ips[0];
+      return formatIp(ips[0]);
     }
   }
 
-  const parsed = parseIp(directIp);
-  return parsed ? parsed.toString() : directIp;
+  return formatIp(directIp);
 }
 
 module.exports = {
   parseIp,
+  formatIp,
   parseRule,
   matchesRule,
   isIpInRules,

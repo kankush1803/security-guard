@@ -46,13 +46,11 @@ function createThreatDetector(userOptions = {}) {
 
     // Check whitelisted paths
     if (options.whitelistedPaths && options.whitelistedPaths.length > 0) {
-      for (const whitePath of options.whitelistedPaths) {
-        if (typeof whitePath === 'string' && (currentPath === whitePath || currentPath.startsWith(whitePath))) {
-          return next();
-        }
-        if (whitePath instanceof RegExp && whitePath.test(currentPath)) {
-          return next();
-        }
+      const isWhitelisted = options.whitelistedPaths.some((p) =>
+        typeof p === 'string' ? (currentPath === p || currentPath.startsWith(p)) : (p instanceof RegExp && p.test(currentPath))
+      );
+      if (isWhitelisted) {
+        return next();
       }
     }
 

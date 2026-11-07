@@ -58,20 +58,15 @@ async function validateTarget(schema, data, target) {
   }
 
   // 2. Zod schema: safeParseAsync or safeParse
-  if (typeof schema.safeParseAsync === 'function') {
-    const result = await schema.safeParseAsync(data);
-    if (result.success) {
-      return { success: true, data: result.data };
-    }
-    return { success: false, issues: formatIssues(result.error.issues, target) };
-  }
+  const parseFn = typeof schema.safeParseAsync === 'function'
+    ? schema.safeParseAsync.bind(schema)
+    : (typeof schema.safeParse === 'function' ? schema.safeParse.bind(schema) : null);
 
-  if (typeof schema.safeParse === 'function') {
-    const result = schema.safeParse(data);
-    if (result.success) {
-      return { success: true, data: result.data };
-    }
-    return { success: false, issues: formatIssues(result.error.issues, target) };
+  if (parseFn) {
+    const result = await parseFn(data);
+    return result.success
+      ? { success: true, data: result.data }
+      : { success: false, issues: formatIssues(result.error.issues, target) };
   }
 
   // 3. Fallback for schema with parse() method

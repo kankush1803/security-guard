@@ -71,6 +71,16 @@ function createRequestSize(userOptions = {}) {
 
   const logger = options.logger || defaultLogger;
 
+  function rejectOversized(req, res, details) {
+    logger.warn('REQUEST_SIZE_EXCEEDED', `Payload exceeded size limit (${maxBytes} bytes)`, {
+      req,
+      details
+    });
+    res.setHeader('Connection', 'close');
+    const error = new PayloadTooLargeError(options.message, details);
+    return sendSecurityResponse(req, res, error, options.statusCode, options.handler);
+  }
+
   return function requestSizeMiddleware(req, res, next) {
     // 1. Inspect Content-Length header
     const { length: contentLength, error: headerError } = parseContentLength(req);
@@ -82,32 +92,18 @@ function createRequestSize(userOptions = {}) {
     }
 
     if (contentLength !== null && contentLength > maxBytes) {
-      logger.warn('REQUEST_SIZE_EXCEEDED', `Content-Length (${contentLength}) exceeds limit (${maxBytes})`, {
-        req,
-        details: { contentLength, maxBytes }
-      });
-      res.setHeader('Connection', 'close');
-      const error = new PayloadTooLargeError(options.message, { contentLength, maxBytes });
-      return sendSecurityResponse(req, res, error, options.statusCode, options.handler);
+      return rejectOversized(req, res, { contentLength, maxBytes });
     }
 
     // 2. Check if body is already parsed by upstream body parser
     if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
       try {
-        let estimatedSize = 0;
-        if (Buffer.isBuffer(req.body)) {
-          estimatedSize = req.body.length;
-        } else {
-          estimatedSize = Buffer.byteLength(JSON.stringify(req.body), 'utf8');
-        }
+        const estimatedSize = Buffer.isBuffer(req.body)
+          ? req.body.length
+          : Buffer.byteLength(JSON.stringify(req.body), 'utf8');
 
         if (estimatedSize > maxBytes) {
-          logger.warn('REQUEST_SIZE_EXCEEDED', `Parsed body size (${estimatedSize}) exceeds limit (${maxBytes})`, {
-            req,
-            details: { estimatedSize, maxBytes }
-          });
-          const error = new PayloadTooLargeError(options.message, { estimatedSize, maxBytes });
-          return sendSecurityResponse(req, res, error, options.statusCode, options.handler);
+          return rejectOversized(req, res, { estimatedSize, maxBytes });
         }
       } catch {
         // Ignore serialization failure; proceed to streaming check
@@ -130,14 +126,7 @@ function createRequestSize(userOptions = {}) {
               if (typeof req.pause === 'function') {
                 req.pause();
               }
-              logger.warn('REQUEST_SIZE_EXCEEDED', `Streamed body (${receivedBytes}) exceeded limit (${maxBytes})`, {
-                req,
-                details: { receivedBytes, maxBytes }
-              });
-
-              res.setHeader('Connection', 'close');
-              const error = new PayloadTooLargeError(options.message, { receivedBytes, maxBytes });
-              sendSecurityResponse(req, res, error, options.statusCode, options.handler);
+              rejectOversized(req, res, { receivedBytes, maxBytes });
               return false;
             }
           }

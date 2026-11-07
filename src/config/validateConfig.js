@@ -3,6 +3,12 @@
 const bytes = require('bytes');
 const { ConfigurationError } = require('../utils/errors');
 
+function assertFunction(fn, name) {
+  if (fn !== undefined && typeof fn !== 'function') {
+    throw new ConfigurationError(`${name} must be a function.`);
+  }
+}
+
 /**
  * Validate Rate Limiter configuration options.
  *
@@ -28,13 +34,8 @@ function validateRateLimiterConfig(options = {}) {
     }
   }
 
-  if (options.keyGenerator !== undefined && typeof options.keyGenerator !== 'function') {
-    throw new ConfigurationError('RateLimiter: "keyGenerator" must be a function.');
-  }
-
-  if (options.skip !== undefined && typeof options.skip !== 'function') {
-    throw new ConfigurationError('RateLimiter: "skip" must be a function.');
-  }
+  assertFunction(options.keyGenerator, 'RateLimiter: "keyGenerator"');
+  assertFunction(options.skip, 'RateLimiter: "skip"');
 }
 
 /**
@@ -55,19 +56,12 @@ function validateApiKeyAuthConfig(options = {}) {
     }
   }
 
-  if (options.keys !== undefined) {
-    if (!Array.isArray(options.keys) && typeof options.keys !== 'object') {
-      throw new ConfigurationError('ApiKeyAuth: "keys" must be an array or object.');
-    }
+  if (options.keys !== undefined && !Array.isArray(options.keys) && typeof options.keys !== 'object') {
+    throw new ConfigurationError('ApiKeyAuth: "keys" must be an array or object.');
   }
 
-  if (options.getKey !== undefined && typeof options.getKey !== 'function') {
-    throw new ConfigurationError('ApiKeyAuth: "getKey" must be a function.');
-  }
-
-  if (options.verifyKey !== undefined && typeof options.verifyKey !== 'function') {
-    throw new ConfigurationError('ApiKeyAuth: "verifyKey" must be a function.');
-  }
+  assertFunction(options.getKey, 'ApiKeyAuth: "getKey"');
+  assertFunction(options.verifyKey, 'ApiKeyAuth: "verifyKey"');
 }
 
 /**
@@ -76,10 +70,8 @@ function validateApiKeyAuthConfig(options = {}) {
  * @param {Object} options
  */
 function validateIpFilterConfig(options = {}) {
-  if (options.mode !== undefined) {
-    if (options.mode !== 'allowlist' && options.mode !== 'blocklist') {
-      throw new ConfigurationError('IpFilter: "mode" must be either "allowlist" or "blocklist".');
-    }
+  if (options.mode !== undefined && options.mode !== 'allowlist' && options.mode !== 'blocklist') {
+    throw new ConfigurationError('IpFilter: "mode" must be either "allowlist" or "blocklist".');
   }
 
   if (options.allowlist !== undefined && !Array.isArray(options.allowlist)) {
@@ -90,9 +82,7 @@ function validateIpFilterConfig(options = {}) {
     throw new ConfigurationError('IpFilter: "blocklist" must be an array of IP strings or CIDR notations.');
   }
 
-  if (options.getIp !== undefined && typeof options.getIp !== 'function') {
-    throw new ConfigurationError('IpFilter: "getIp" must be a function.');
-  }
+  assertFunction(options.getIp, 'IpFilter: "getIp"');
 }
 
 /**
@@ -123,10 +113,8 @@ function validateRequestSizeConfig(options = {}) {
  * @param {Object} options
  */
 function validateThreatDetectorConfig(options = {}) {
-  if (options.action !== undefined) {
-    if (!['reject', 'log', 'pass'].includes(options.action)) {
-      throw new ConfigurationError('ThreatDetector: "action" must be "reject", "log", or "pass".');
-    }
+  if (options.action !== undefined && !['reject', 'log', 'pass'].includes(options.action)) {
+    throw new ConfigurationError('ThreatDetector: "action" must be "reject", "log", or "pass".');
   }
 
   if (options.customRules !== undefined && !Array.isArray(options.customRules)) {

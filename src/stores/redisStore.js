@@ -39,6 +39,7 @@ class RedisStore {
     this.windowMs = options.windowMs || 60000;
     this.passOnConnectionError = options.passOnConnectionError !== false;
     this.logger = options.logger || defaultLogger;
+    this._evalMode = null;
   }
 
   /**
@@ -70,24 +71,30 @@ class RedisStore {
   async _evalLua(key, windowMs) {
     const fullKey = this._prefixKey(key);
 
-    // Node-redis v4+ client.eval syntax
-    if (typeof this.client.eval === 'function') {
-      try {
-        // Attempt node-redis v4 object parameters
-        const res = await this.client.eval(LUA_INCR_SCRIPT, {
-          keys: [fullKey],
-          arguments: [String(windowMs)]
-        });
-        return res;
-      } catch (err) {
-        // If node-redis object parameter syntax failed, try ioredis positional syntax:
-        // eval(script, numkeys, key1, ..., arg1, ...)
-        const res = await this.client.eval(LUA_INCR_SCRIPT, 1, fullKey, String(windowMs));
-        return res;
-      }
+    if (typeof this.client.eval !== 'function') {
+      throw new Error('Provided Redis client does not support eval command.');
     }
 
-    throw new Error('Provided Redis client does not support eval command.');
+    if (this._evalMode === 'node-redis') {
+      return this.client.eval(LUA_INCR_SCRIPT, { keys: [fullKey], arguments: [String(windowMs)] });
+    }
+    if (this._evalMode === 'ioredis') {
+      return this.client.eval(LUA_INCR_SCRIPT, 1, fullKey, String(windowMs));
+    }
+
+    // Auto-detect client signature on first execution
+    try {
+      const res = await this.client.eval(LUA_INCR_SCRIPT, {
+        keys: [fullKey],
+        arguments: [String(windowMs)]
+      });
+      this._evalMode = 'node-redis';
+      return res;
+    } catch {
+      const res = await this.client.eval(LUA_INCR_SCRIPT, 1, fullKey, String(windowMs));
+      this._evalMode = 'ioredis';
+      return res;
+    }
   }
 
   /**

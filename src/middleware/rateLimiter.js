@@ -3,25 +3,12 @@
 const rateLimit = require('express-rate-limit');
 const defaults = require('../config/defaults');
 const { validateRateLimiterConfig } = require('../config/validateConfig');
+const { formatIp } = require('../security/ipAddress');
 const { MemoryStore } = require('../stores/memoryStore');
 const { RedisStore } = require('../stores/redisStore');
 const { RateLimitError } = require('../utils/errors');
 const { sendSecurityResponse } = require('../utils/response');
 const { defaultLogger } = require('../utils/logger');
-
-/**
- * Normalizes an IP address to avoid IPv4-mapped IPv6 duplicates.
- *
- * @param {string} ip
- * @returns {string}
- */
-function normalizeIp(ip) {
-  if (!ip) return '127.0.0.1';
-  if (ip.startsWith('::ffff:')) {
-    return ip.substring(7);
-  }
-  return ip;
-}
 
 /**
  * Default key generator based on client IP.
@@ -31,7 +18,7 @@ function normalizeIp(ip) {
  */
 function defaultKeyGenerator(req) {
   const rawIp = req.ip || (req.socket && req.socket.remoteAddress) || '127.0.0.1';
-  return normalizeIp(rawIp);
+  return formatIp(rawIp);
 }
 
 /**

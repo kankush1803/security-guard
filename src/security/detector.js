@@ -46,6 +46,36 @@ const DEFAULT_THREAT_PATTERNS = [
 ];
 
 /**
+ * Evaluates a threat rule against a string value.
+ *
+ * @param {Object} rule
+ * @param {string} value
+ * @param {string} path
+ * @param {string} [snippetPrefix]
+ * @returns {Object|null}
+ */
+function matchRule(rule, value, path, snippetPrefix) {
+  let matched = false;
+  if (typeof rule.pattern === 'function') {
+    matched = Boolean(rule.pattern(value, path));
+  } else if (rule.pattern instanceof RegExp) {
+    matched = rule.pattern.test(value);
+  }
+
+  if (matched) {
+    const raw = snippetPrefix ? `${snippetPrefix}: ${value}` : value;
+    return {
+      ruleId: rule.id || 'CUSTOM_RULE',
+      ruleName: rule.name || 'Custom Threat Rule',
+      path,
+      snippet: raw.length > 80 ? `${raw.substring(0, 80)}...` : raw,
+      severity: rule.severity || 'medium'
+    };
+  }
+  return null;
+}
+
+/**
  * Recursively inspects values in strings, arrays, or objects for threat signatures.
  *
  * @param {any} value - Value to inspect.
@@ -58,39 +88,15 @@ const DEFAULT_THREAT_PATTERNS = [
 function scanValue(value, rules, currentPath = '', whitelistedKeys = [], seen = new Set()) {
   const matches = [];
 
-  if (value === null || value === undefined) {
-    return matches;
-  }
-
-  if (seen.has(value)) {
+  if (value === null || value === undefined || seen.has(value)) {
     return matches;
   }
 
   // Handle strings
   if (typeof value === 'string') {
     for (const rule of rules) {
-      if (typeof rule.pattern === 'function') {
-        const customMatch = rule.pattern(value, currentPath);
-        if (customMatch) {
-          matches.push({
-            ruleId: rule.id || 'CUSTOM_RULE',
-            ruleName: rule.name || 'Custom Threat Rule',
-            path: currentPath,
-            snippet: value.length > 80 ? `${value.substring(0, 80)}...` : value,
-            severity: rule.severity || 'medium'
-          });
-        }
-      } else if (rule.pattern instanceof RegExp) {
-        if (rule.pattern.test(value)) {
-          matches.push({
-            ruleId: rule.id,
-            ruleName: rule.name,
-            path: currentPath,
-            snippet: value.length > 80 ? `${value.substring(0, 80)}...` : value,
-            severity: rule.severity
-          });
-        }
-      }
+      const match = matchRule(rule, value, currentPath);
+      if (match) matches.push(match);
     }
     return matches;
   }
@@ -112,16 +118,10 @@ function scanValue(value, rules, currentPath = '', whitelistedKeys = [], seen = 
     // Get all own property names including non-enumerable or __proto__
     const propNames = Object.getOwnPropertyNames(value);
     for (const propName of propNames) {
+      const keyPath = currentPath ? `${currentPath}.${propName}` : propName;
       for (const rule of rules) {
-        if (rule.pattern instanceof RegExp && rule.pattern.test(propName)) {
-          matches.push({
-            ruleId: rule.id,
-            ruleName: rule.name,
-            path: currentPath ? `${currentPath}.${propName}` : propName,
-            snippet: `Key name: ${propName}`,
-            severity: rule.severity
-          });
-        }
+        const match = matchRule(rule, propName, keyPath, 'Key name');
+        if (match) matches.push(match);
       }
     }
 
@@ -142,11 +142,9 @@ function scanValue(value, rules, currentPath = '', whitelistedKeys = [], seen = 
     }
 
     for (const [key, val] of Object.entries(value)) {
-      // Check if key is whitelisted
       if (whitelistedKeys.includes(key.toLowerCase())) {
         continue;
       }
-
       const childPath = currentPath ? `${currentPath}.${key}` : key;
       matches.push(...scanValue(val, rules, childPath, whitelistedKeys, seen));
     }

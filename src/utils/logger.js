@@ -182,22 +182,8 @@ class SecurityLogger {
 
     const formatted = `[secure-api-guard] [${event.timestamp}] [${event.level}] [${event.eventType}] ${event.message} (reqId=${event.requestId}, ip=${event.ip})`;
 
-    switch (level) {
-      case 'error':
-        console.error(formatted, event.details);
-        break;
-      case 'warn':
-        console.warn(formatted, event.details);
-        break;
-      case 'info':
-        console.info(formatted, event.details);
-        break;
-      case 'debug':
-        console.debug(formatted, event.details);
-        break;
-      default:
-        console.log(formatted, event.details);
-    }
+    const logFn = typeof console[level] === 'function' ? console[level] : console.log;
+    logFn(formatted, event.details);
   }
 
   debug(eventType, message, context) {

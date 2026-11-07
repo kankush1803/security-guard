@@ -19,6 +19,7 @@ const {
 
 const {
   parseIp,
+  formatIp,
   parseRule,
   matchesRule,
   isIpInRules,
@@ -94,6 +95,7 @@ module.exports = {
   isKeyExpired,
 
   parseIp,
+  formatIp,
   parseRule,
   matchesRule,
   isIpInRules,

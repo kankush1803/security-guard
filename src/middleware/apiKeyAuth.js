@@ -100,6 +100,37 @@ function createApiKeyAuth(userOptions = {}) {
     }).filter(Boolean);
   }
 
+  function authorizeKey(keyRecord, req, res, next) {
+    if (isKeyExpired(keyRecord)) {
+      logger.warn('API_KEY_EXPIRED', `API key ${keyRecord.id || ''} has expired`, { req });
+      const error = new ForbiddenError(options.forbiddenMessage);
+      return sendSecurityResponse(req, res, error, options.forbiddenStatusCode, options.handler);
+    }
+
+    if (options.requiredPermissions && options.requiredPermissions.length > 0) {
+      const keyPermissions = Array.isArray(keyRecord.permissions) ? keyRecord.permissions : [];
+      const hasAll = options.requiredPermissions.every((perm) => keyPermissions.includes(perm));
+
+      if (!hasAll) {
+        logger.warn('API_KEY_INSUFFICIENT_PERMISSIONS', `API key ${keyRecord.id} lacks required permissions`, {
+          req,
+          details: { required: options.requiredPermissions, actual: keyPermissions }
+        });
+        const error = new ForbiddenError('Forbidden: Insufficient permissions for this API resource.');
+        return sendSecurityResponse(req, res, error, options.forbiddenStatusCode, options.handler);
+      }
+    }
+
+    req.apiKey = {
+      id: keyRecord.id || 'custom',
+      name: keyRecord.name,
+      permissions: keyRecord.permissions || [],
+      metadata: keyRecord.metadata || {}
+    };
+
+    return next();
+  }
+
   return async function apiKeyAuthMiddleware(req, res, next) {
     const rawKey = extractApiKey(req, options);
 
@@ -120,26 +151,13 @@ function createApiKeyAuth(userOptions = {}) {
         }
 
         const keyInfo = typeof verifyResult === 'object' ? verifyResult : {};
-        if (isKeyExpired(keyInfo)) {
-          logger.warn('API_KEY_EXPIRED', `API key ${keyInfo.id || ''} has expired`, { req });
-          const error = new ForbiddenError(options.forbiddenMessage);
-          return sendSecurityResponse(req, res, error, options.forbiddenStatusCode, options.handler);
-        }
-
-        req.apiKey = {
-          id: keyInfo.id || 'custom',
-          name: keyInfo.name,
-          permissions: keyInfo.permissions || [],
-          metadata: keyInfo.metadata || {}
-        };
-        return next();
+        return authorizeKey(keyInfo, req, res, next);
       }
 
-      // Compute hash of incoming key
+      // 2. Hash lookup
       const incomingHash = hashApiKey(rawKey, options.hashAlgorithm);
       let matchedRecord = null;
 
-      // 2. Custom getKey lookup function
       if (typeof options.getKey === 'function') {
         const retrieved = await options.getKey(incomingHash, req);
         if (retrieved) {
@@ -149,7 +167,6 @@ function createApiKeyAuth(userOptions = {}) {
           }
         }
       } else {
-        // 3. Search precomputed static keys using constant-time comparison
         for (const candidate of precomputedKeys) {
           if (candidate.hash && secureCompare(incomingHash, candidate.hash)) {
             matchedRecord = candidate;
@@ -164,37 +181,7 @@ function createApiKeyAuth(userOptions = {}) {
         return sendSecurityResponse(req, res, error, options.statusCode, options.handler);
       }
 
-      // Check expiration
-      if (isKeyExpired(matchedRecord)) {
-        logger.warn('API_KEY_EXPIRED', `API key ${matchedRecord.id || ''} has expired`, { req });
-        const error = new ForbiddenError(options.forbiddenMessage);
-        return sendSecurityResponse(req, res, error, options.forbiddenStatusCode, options.handler);
-      }
-
-      // Check permissions if required
-      if (options.requiredPermissions && options.requiredPermissions.length > 0) {
-        const keyPermissions = Array.isArray(matchedRecord.permissions) ? matchedRecord.permissions : [];
-        const hasAllPermissions = options.requiredPermissions.every((perm) => keyPermissions.includes(perm));
-
-        if (!hasAllPermissions) {
-          logger.warn('API_KEY_INSUFFICIENT_PERMISSIONS', `API key ${matchedRecord.id} lacks required permissions`, {
-            req,
-            details: { required: options.requiredPermissions, actual: keyPermissions }
-          });
-          const error = new ForbiddenError('Forbidden: Insufficient permissions for this API resource.');
-          return sendSecurityResponse(req, res, error, options.forbiddenStatusCode, options.handler);
-        }
-      }
-
-      // Attach sanitized key record (NEVER the plaintext key or raw hash)
-      req.apiKey = {
-        id: matchedRecord.id,
-        name: matchedRecord.name,
-        permissions: matchedRecord.permissions || [],
-        metadata: matchedRecord.metadata || {}
-      };
-
-      return next();
+      return authorizeKey(matchedRecord, req, res, next);
     } catch (err) {
       logger.error('API_KEY_AUTH_ERROR', `Internal error during API key verification: ${err.message}`, { req });
       return next(err);

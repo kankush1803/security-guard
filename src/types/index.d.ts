@@ -213,6 +213,7 @@ export interface IpFilterOptions {
 export function ipFilter(options?: IpFilterOptions): RequestHandler;
 export function createIpFilter(options?: IpFilterOptions): RequestHandler;
 export function parseIp(ipString: string): any;
+export function formatIp(ipString: string): string;
 export function parseRule(ruleString: string): any;
 export function matchesRule(clientIp: any, rule: any): boolean;
 export function isIpInRules(clientIpStr: string, compiledRules: any[]): boolean;
